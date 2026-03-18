@@ -1,4 +1,3 @@
-version: "3.9"
 
 # Usage:
 #   iMac (CPU):  docker compose --profile cpu up
