@@ -1,0 +1,48 @@
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# --- deps ---
+RUN apt-get update && apt-get install -y \
+    git cmake wget curl \
+    python3.11 python3.11-pip python3.11-dev \
+    lsb-release software-properties-common gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# clang-18
+RUN bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)" -- 18 \
+    && ln -sf /usr/bin/clang-18 /usr/bin/clang \
+    && ln -sf /usr/bin/clang++-18 /usr/bin/clang++
+
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/pip3.11 /usr/bin/pip3
+
+RUN pip3 install --no-cache-dir huggingface_hub
+
+WORKDIR /app
+
+# clone BitNet
+RUN git clone --recursive https://github.com/microsoft/BitNet.git . \
+    && pip3 install --no-cache-dir -r requirements.txt
+
+# compile GPU kernels (Ampere = SM 86 for RTX 3090)
+WORKDIR /app/gpu
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# compile the CUDA kernels at build time
+WORKDIR /app/gpu/bitnet_kernels
+RUN TORCH_CUDA_ARCH_LIST="8.6" bash compile.sh
+
+# checkpoints volume
+RUN mkdir -p /checkpoints
+
+WORKDIR /app/gpu
+
+COPY scripts/entrypoint-gpu.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["/entrypoint.sh"]

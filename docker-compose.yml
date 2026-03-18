@@ -1,0 +1,64 @@
+version: "3.9"
+
+# Usage:
+#   iMac (CPU):  docker compose --profile cpu up
+#   PC (GPU):    docker compose --profile gpu up
+#
+# First run downloads the model into a named volume.
+# Subsequent runs reuse it — no re-downloading.
+
+services:
+
+  # ── Intel iMac — x86 CPU inference ──────────────────────────────────────────
+  bitnet-cpu:
+    profiles: [cpu]
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: bitnet-cpu:latest
+    container_name: bitnet-cpu
+    volumes:
+      - bitnet-models:/models
+    environment:
+      - BITNET_MODEL=${BITNET_MODEL:-BitNet-b1.58-2B-4T}
+      - BITNET_QUANT=${BITNET_QUANT:-i2_s}
+      - BITNET_MODE=${BITNET_MODE:-server}      # server | chat | benchmark
+      - N_THREADS=${N_THREADS:-8}
+      - CTX_SIZE=${CTX_SIZE:-2048}
+    ports:
+      - "${CPU_PORT:-8080}:8080"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # ── PC — RTX 3090 GPU inference ──────────────────────────────────────────────
+  bitnet-gpu:
+    profiles: [gpu]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    image: bitnet-gpu:latest
+    container_name: bitnet-gpu
+    volumes:
+      - bitnet-checkpoints:/checkpoints
+    environment:
+      - BITNET_MODE=${BITNET_MODE:-chat}        # chat | benchmark
+      - CTX_SIZE=${CTX_SIZE:-2048}
+    ports:
+      - "${GPU_PORT:-8081}:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  bitnet-models:
+    name: bitnet-models
+  bitnet-checkpoints:
+    name: bitnet-checkpoints

@@ -1,0 +1,40 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# --- deps ---
+RUN apt-get update && apt-get install -y \
+    git cmake wget curl \
+    python3.11 python3.11-pip python3.11-dev \
+    lsb-release software-properties-common gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# clang-18 via LLVM apt
+RUN bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)" -- 18 \
+    && ln -sf /usr/bin/clang-18 /usr/bin/clang \
+    && ln -sf /usr/bin/clang++-18 /usr/bin/clang++
+
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/pip3.11 /usr/bin/pip3
+
+# huggingface-cli
+RUN pip3 install --no-cache-dir huggingface_hub
+
+WORKDIR /app
+
+# clone BitNet
+RUN git clone --recursive https://github.com/microsoft/BitNet.git . \
+    && pip3 install --no-cache-dir -r requirements.txt
+
+# model goes in a volume mount — don't bake it into the image
+RUN mkdir -p /models
+
+# entrypoint script
+COPY scripts/entrypoint-cpu.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["/entrypoint.sh"]
