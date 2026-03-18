@@ -17,16 +17,21 @@ RUN bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)" -- 18 \
     && ln -sf /usr/bin/clang++-18 /usr/bin/clang++
 
 RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 \
-    && python3.11 -m pip install --upgrade pip
+    && ln -sf /usr/bin/pip3.11 /usr/bin/pip3
 
 # huggingface-cli
-RUN python3 -m pip install --no-cache-dir huggingface_hub
+RUN pip3 install --no-cache-dir huggingface_hub
 
 WORKDIR /app
 
 # clone BitNet
 RUN git clone --recursive https://github.com/microsoft/BitNet.git . \
-    && python3 -m pip install --no-cache-dir -r requirements.txt
+    && pip3 install --no-cache-dir -r requirements.txt
+
+# patch clang-18 const-correctness bug in BitNet source
+# (int8_t* cannot be initialised from const int8_t* without explicit cast)
+RUN sed -i 's/int8_t \* y_col = y + col \* by;/int8_t * y_col = (int8_t *)(y + col * by);/' \
+    src/ggml-bitnet-mad.cpp
 
 # model goes in a volume mount — don't bake it into the image
 RUN mkdir -p /models
